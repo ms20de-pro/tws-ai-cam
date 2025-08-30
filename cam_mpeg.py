@@ -28,10 +28,10 @@ import numpy as np
 PAGE = """\
 <html>
 <head>
-<title>picamera2 MJPEG streaming demo</title>
+<title>picamera2 MJPEG streaming for Timberwolf Server</title>
 </head>
 <body>
-<h1>Picamera2 MJPEG Streaming Demo</h1>
+<h1>Picamera2 MJPEG Streaming for Timberwolf Server</h1>
 <img src="stream.mjpg" width="640" height="480" />
 </body>
 </html>
@@ -58,7 +58,7 @@ class Detection(DetectionsBase):
         #box = imx500.convert_inference_coords(coords, metadata, picam2)
 
         # try to calculate the bounding box in the original image coordinates
-        vh, vw = 640, 480
+        vh, vw = (args.width, args.height)
 
         # coords to box
         y1 = int(coords[0][0] * vw)
@@ -95,11 +95,23 @@ class Detections:
             # Compare each coordinate with tolerance
             return all(abs(a - b) <= tol for a, b in zip(box1, box2))
 
-        for i, det in enumerate(self.detections):
-            if boxes_close(det.box, detection.box, args.movement_threshold) and det.category == detection.category:
+        # check if it has only one detection of this category
+        if sum(det.category == detection.category for det in self.detections) == 1:
+            # has this the detection been seen in the last second
+            det = next(det for det in self.detections if det.category == detection.category)
+            if det.lastSeen > time() - 1:
+                logging.debug("Detection '%s' updated", detection.category)
                 det.updateLastSeen()
                 det.updateBox(detection.box)
                 return False
+
+        # for multiple detections find nearest box
+        for i, det in enumerate(self.detections):
+            if det.category == detection.category and boxes_close(det.box, detection.box, args.movement_threshold):
+                det.updateLastSeen()
+                det.updateBox(detection.box)
+                return False
+        
         self.detections.append(RecentDetection(detection))
         return True
 
@@ -152,34 +164,39 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
                         output.condition.wait()
                         frame = output.frame
                         detections = recent_detections.getDetections()
-                        # Decode JPEG to image array
-                        img_array = cv2.imdecode(
-                            np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR
-                        )
-                        # Draw bounding boxes
-                        for det in detections:
-                            x1, y1, x2, y2 = det.box
-                            cv2.rectangle(img_array, (x1, y1), (x2, y2), (0, 255, 0), 1)
 
-                            # Add text label
-                            label = f"{labels[int(det.category)]}: {det.conf:.2f}"
-                            cv2.putText(img_array, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                        # send frame directly if there are no detections
+                        frame_to_send = frame
 
-                        # Re-encode image to JPEG
-                        ret, jpeg = cv2.imencode('.jpg', img_array)
-                        if not ret:
-                            continue
-                        frame_to_send = jpeg.tobytes()
-                    self.wfile.write(b'--FRAME\r\n')
-                    self.send_header('Content-Type', 'image/jpeg')
-                    self.send_header('Content-Length', len(frame_to_send))
-                    self.end_headers()
-                    self.wfile.write(frame_to_send)
-                    self.wfile.write(b'\r\n')
+                        if detections:
+                            # Decode JPEG to image array
+                            img_array = cv2.imdecode(
+                                np.frombuffer(frame, dtype=np.uint8), cv2.IMREAD_COLOR
+                            )
+                            # Draw bounding boxes
+                            for det in detections:
+                                x1, y1, x2, y2 = det.box
+                                cv2.rectangle(img_array, (x1, y1), (x2, y2), (0, 255, 0), 1)
+
+                                # Add text label
+                                label = f"{labels[int(det.category)]}: {det.conf:.2f}"
+                                cv2.putText(img_array, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+                            # Re-encode image to JPEG
+                            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), args.jpeg_quality]
+                            ret, jpeg = cv2.imencode('.jpg', img_array, encode_param)
+                            if not ret:
+                                continue
+                            frame_to_send = jpeg.tobytes()
+                        
+                        self.wfile.write(b'--FRAME\r\n')
+                        self.send_header('Content-Type', 'image/jpeg')
+                        self.send_header('Content-Length', len(frame_to_send))
+                        self.end_headers()
+                        self.wfile.write(frame_to_send)
+                        self.wfile.write(b'\r\n')
             except Exception as e:
-                logging.warning(
-                    'Removed streaming client %s: %s',
-                    self.client_address, str(e))
+                logging.info('Removed streaming client %s: %s', self.client_address, str(e))
         else:
             self.send_error(404)
             self.end_headers()
@@ -225,13 +242,6 @@ def parse_detection_results(request: CompletedRequest) -> List[Detection]:
     if bbox_order == "xy":
         boxes = boxes[:, [1, 0, 3, 2]]
 
-    #print("boxes:", boxes)
-
-    #print("scores:", scores)
-
-    #print("classes:", classes)
-
-
     boxes = np.array_split(boxes, 4, axis=1)
     boxes = zip(*boxes)
 
@@ -251,7 +261,6 @@ def handle_detection_results(request: CompletedRequest):
     if detections:
         labels = get_labels()
         # Draw on image
-        #frame = request.get_image()
         output_detections = []
         for det in detections:
             if recent_detections.add_or_update(det):
@@ -260,8 +269,6 @@ def handle_detection_results(request: CompletedRequest):
                 label = f"{labels[int(det.category)]} ({det.conf:.2f} {det.box})"
                 logging.info("Detected %s", label)
                 #cv2.putText(frame, f"{det.label} {det.score:.2f}", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 2)
-                # Publish detection to MQTT
-                # mqtt_client.publish("picamera2/detection", f"{label}: {det.conf:.2f}, bbox: {det.box}")
                 output_detections.append(det)
             else:
                 logging.debug("Updated existing detection: %s", labels[int(det.category)])
@@ -303,6 +310,9 @@ def get_args():
     parser.add_argument("--print-intrinsics", action="store_true",
                         help="Print JSON network_intrinsics then exit")
 
+    parser.add_argument("--width", type=int, default=640, help="Width of the input image")
+    parser.add_argument("--height", type=int, default=480, help="Height of the input image")
+    parser.add_argument("--jpeg-quality", type=int, default=80, help="JPEG quality (0-100)")
     parser.add_argument("--min-score", type=float, default=0.2, help="Minimum score threshold for detections")
     parser.add_argument("--movement-threshold", type=int, default=5, help="Minimum movement threshold for detections")
 
@@ -360,9 +370,15 @@ def run_app():
 
 
     picam2 = Picamera2()
-    picam2.configure(picam2.create_video_configuration(main={"size": (640, 480)}, controls={"FrameDurationLimits": (100000, 100000)}))
+    picam2.configure(picam2.create_video_configuration(
+        main={
+            "size": (args.width, args.height)
+        },
+        controls={
+            "FrameDurationLimits": (100000, 100000)
+        }))
     imx500.show_network_fw_progress_bar()
-    picam2.start_recording(JpegEncoder(), FileOutput(output))
+    picam2.start_recording(JpegEncoder(q=args.jpeg_quality), FileOutput(output))
 
     if intrinsics.preserve_aspect_ratio:
         logging.debug("Preserving aspect ratio")
