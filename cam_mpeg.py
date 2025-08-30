@@ -32,6 +32,47 @@ PAGE = """\
 </head>
 <body>
 <h1>Picamera2 MJPEG Streaming for Timberwolf Server</h1>
+<div style="max-width:700px;">
+<article>
+<pre style="background:#f6f8fa;border-radius:6px;padding:1em;">
+# Overview
+
+This software runs an MJPEG streaming server on a Raspberry Pi camera using Picamera2 and IMX500 neural network hardware.
+It performs real-time object detection, overlays bounding boxes and labels on the video stream, and publishes detection results via MQTT.
+
+## Features
+
+- Live MJPEG video streaming in browser
+- Real-time object detection with bounding boxes and labels
+- MQTT publishing of detection events
+- Configurable detection model, image size, and thresholds
+
+## Usage
+
+1. Install dependencies:
+   - <code>pip3 install simplejpeg paho-mqtt opencv-python</code>
+2. Run the script:
+   - <code>python3 cam_mpeg.py --mqtt-host &lt;broker&gt; [other options]</code>
+3. Open your browser at <code>http://&lt;raspberry-pi-ip&gt;:8000</code>
+
+## Command-line options
+
+- <code>--model</code>: Path to neural network model (.rpk)
+- <code>--width</code>, <code>--height</code>: Image size
+- <code>--jpeg-quality</code>: JPEG compression quality
+- <code>--threshold</code>: Detection confidence threshold
+- <code>--mqtt-host</code>: MQTT broker host
+- <code>--mqtt-user</code>, <code>--mqtt-password</code>: MQTT credentials
+
+See <code>python3 cam_mpeg.py --help</code> for all options.
+
+## MQTT Output
+
+Detection results are published as JSON to <code>picamera2/detections</code> topic.
+
+</pre>
+</article>
+</div>
 <img src="stream.mjpg" width="640" height="480" />
 </body>
 </html>
