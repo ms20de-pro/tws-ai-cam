@@ -42,7 +42,7 @@ Detection results are published as JSON to <code>picamera2/detections</code> top
 ### VISU camera stream
 
 Use setting MJPEG Stream and enter the URL.
-http://<host-or-ip>:8000/stream.mjpg
+`http://<host-or-ip>:8000/stream.mjpg`
 
 ### MQTT Subsystem
 
