@@ -7,23 +7,65 @@ It performs real-time object detection, overlays bounding boxes and labels on th
 
 ## Features
 
-- Live MJPEG video streaming in browser
+- Live MJPEG video streaming in the Timberwolf Server VISU
 - Real-time object detection with bounding boxes and labels
-- MQTT publishing of detection events
+- MQTT publishing of detection events with a lot of possibilities for Smart Home integration
 - Configurable detection model, image size, and thresholds
 
 ## Usage
 
-1. Install dependencies:
+1. You need to have a Raspberry Pi with the AI camera module installed and the software for the camera set up. See https://www.raspberrypi.com/documentation/accessories/ai-camera.html for more information.
+2. Install dependencies:
    - <code>pip3 install simplejpeg paho-mqtt opencv-python</code>
-2. Run the script:
-   - <code>python3 cam_mpeg.py --mqtt-host &lt;broker&gt; [other options]</code>
-   - Use systemd example to run the script as a service.
-3. Add the stream to camera widget in the Timberwolf Server VISU.
+3. Run the script:
+   - <code>python3 cam_mpeg.py --mqtt-host &lt;broker&gt; [other options]</code>. Due to the upload speed for the AI model, it can take some time until the stream is available.
+   - Use systemd example to run the script as a service in the background and automatically start on boot.
+4. Add the stream to camera widget in the Timberwolf Server VISU.
+
+## Install as Systemd Service
+
+Copy `cam_mpeg.py` to a suitable location, e.g., `/usr/local/bin/ai-cam-tws`:
+
+```bash
+sudo cp cam_mpeg.py /usr/local/bin/ai-cam-tws
+```
+
+Make the script executable:
+
+```bash
+sudo chmod +x /usr/local/bin/ai-cam-tws
+```
+
+Create an configuration file for the service:
+
+```bash
+sudo nano /etc/ai-cam-tws.conf
+```
+
+Copy the file provided in the `systemd` directory to `/etc/systemd/system/ai-cam-tws.service`:
+
+```bash
+sudo cp systemd/ai-cam-tws.service /etc/systemd/system/
+```
+
+Then, enable and start the service:
+
+```bash
+sudo systemctl enable ai-cam-tws
+sudo systemctl start ai-cam-tws
+```
+
+Check the status of the service:
+
+```bash
+sudo systemctl status ai-cam-tws
+```
+
+Due to the upload speed for the AI model, it can take some time until the stream is available.
 
 ## Command-line options
 
-- <code>--model</code>: Path to neural network model (.rpk)
+- <code>--model</code>: Path to different neural network model (.rpk)
 - <code>--width</code>, <code>--height</code>: Image size
 - <code>--jpeg-quality</code>: JPEG compression quality
 - <code>--threshold</code>: Detection confidence threshold
@@ -39,10 +81,15 @@ Detection results are published as JSON to <code>picamera2/detections</code> top
 
 ## Timberwolf Server Configuration
 
-### VISU camera stream
+### VISU
+
+Create a new camera widget in the Timberwolf Server VISU.
 
 Use setting MJPEG Stream and enter the URL.
 `http://<host-or-ip>:8000/stream.mjpg`
+
+Allow capture if you want to trigger a capture via MQTT.
+The last captures are stored in the Timberwolf Server and can be viewed in the detail view of the camera widget if enabled in the widget settings.
 
 ### MQTT Subsystem
 
