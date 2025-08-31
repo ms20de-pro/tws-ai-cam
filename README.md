@@ -24,10 +24,11 @@ It performs real-time object detection, overlays bounding boxes and labels on th
 
 ## Install as Systemd Service
 
-Copy `cam_mpeg.py` to a suitable location, e.g., `/usr/local/bin/ai-cam-tws`:
+Copy `cam_mpeg.py` and `assets` folder to a suitable location, e.g., `/usr/local/bin/ai-cam-tws`:
 
 ```bash
 sudo cp cam_mpeg.py /usr/local/bin/ai-cam-tws
+sudo cp -r assets /usr/local/bin/ai-cam-tws
 ```
 
 Make the script executable:
