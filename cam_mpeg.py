@@ -1,5 +1,6 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
+# Raspberry Pi AI Camera with the Timberwolf Server VISU
 # MJPEG streaming server with detection overlay
 # Auth: Matthias Schmidt
 # Some parts copied from https://picamera.readthedocs.io/en/release-1.13/recipes2.html
@@ -339,7 +340,7 @@ def handle_detection_results(request: CompletedRequest):
 
 def get_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Picamera2 MJPEG streaming with MQTT")
+    parser = argparse.ArgumentParser(description="ai-cam-tws: Picamera2 MJPEG streaming with MQTT")
     parser.add_argument("--model", type=str, help="Path of the model",
                         default="/usr/share/imx500-models/imx500_network_ssd_mobilenetv2_fpnlite_320x320_pp.rpk")
     parser.add_argument("--fps", type=int, help="Frames per second")
