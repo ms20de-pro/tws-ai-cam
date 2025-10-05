@@ -4,7 +4,7 @@ Description=Raspberry Pi AI Camera with the Timberwolf Server VISU
 [Service]
 Type=simple
 EnvironmentFile=/etc/ai-cam-tws.conf
-ExecStart=/usr/local/bin/ai-cam-tws/cam_mpeg.py --mqtt-host $MQTT_HOST --width $WIDTH --height $HEIGHT --movement-threshold 20
+ExecStart=/usr/local/bin/ai-cam-tws/cam_mpeg.py --mqtt-host $MQTT_HOST --width $WIDTH --height $HEIGHT --movement-threshold 20 --labels-to-ignore="${LABELS_TO_IGNORE}"
 
 [Install]
 WantedBy=multi-user.target

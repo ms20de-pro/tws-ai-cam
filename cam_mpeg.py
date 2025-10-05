@@ -248,6 +248,7 @@ class StreamingServer(socketserver.ThreadingMixIn, server.HTTPServer):
     allow_reuse_address = True
     daemon_threads = True
 
+detection_ids_to_ignore = set()
 recent_detections = Detections()
 output = StreamingOutput()
 intrinsics = None
@@ -305,6 +306,9 @@ def handle_detection_results(request: CompletedRequest):
         # Draw on image
         output_detections = []
         for det in detections:
+            if int(det.category) in detection_ids_to_ignore:
+                continue
+
             if recent_detections.add_or_update(det):
                 #x1, y1, x2, y2 = det.bbox
                 #cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -351,6 +355,8 @@ def get_args():
                         help="Path to the labels file")
     parser.add_argument("--print-intrinsics", action="store_true",
                         help="Print JSON network_intrinsics then exit")
+    parser.add_argument("--labels-to-ignore", type=str,
+                        help="List of labels to ignore (comma separated)")
 
     parser.add_argument("--width", type=int, default=640, help="Width of the input image")
     parser.add_argument("--height", type=int, default=480, help="Height of the input image")
@@ -369,7 +375,7 @@ def get_args():
     return parser.parse_args()
 
 def run_app():
-    global output, imx500, intrinsics, args, mqtt_client, picam2
+    global output, imx500, intrinsics, args, mqtt_client, picam2, detection_ids_to_ignore
     args = get_args()
 
     # set loglevel
@@ -401,6 +407,12 @@ def run_app():
     if args.print_intrinsics:
         print(intrinsics)
         exit()
+
+    # parse comma and convert comma separated label texts to set of ids to ignore
+    if args.labels_to_ignore:
+        labels_to_ignore = [label.strip() for label in args.labels_to_ignore.split(",")]
+        detection_ids_to_ignore = {i for i, label in enumerate(intrinsics.labels) if label in labels_to_ignore}
+        logging.info("Ignoring labels: %s", ", ".join(labels_to_ignore))
 
     # Set up MQTT client
     mqtt_client = mqtt.Client()
