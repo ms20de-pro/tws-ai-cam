@@ -87,7 +87,7 @@ class DetectionsBase:
     Base class for detection results.
     """
     def __init__(self, category, conf, box):
-        self.category = category
+        self.category = int(category)
         self.conf = conf
         self.box = box
 
@@ -141,7 +141,7 @@ class Detections:
         if sum(det.category == detection.category for det in self.detections) == 1:
             # has this the detection been seen in the last second
             det = next(det for det in self.detections if det.category == detection.category)
-            if det.lastSeen > time() - 1:
+            if det.lastSeen > time() - 2:
                 logging.debug("Detection '%s' updated", detection.category)
                 det.updateLastSeen()
                 det.updateBox(detection.box)
@@ -200,16 +200,15 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
             self.end_headers()
             labels = get_labels()
+            # Set a timeout for the connection to avoid hanging threads
+            self.request.settimeout(10)
             try:
                 while True:
                     with output.condition:
                         output.condition.wait()
                         frame = output.frame
                         detections = recent_detections.getDetections()
-
-                        # send frame directly if there are no detections
                         frame_to_send = frame
-
                         if detections:
                             # Decode JPEG to image array
                             img_array = cv2.imdecode(
@@ -230,18 +229,33 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
                             if not ret:
                                 continue
                             frame_to_send = jpeg.tobytes()
-                        
-                        self.wfile.write(b'--FRAME\r\n')
-                        self.send_header('Content-Type', 'image/jpeg')
-                        self.send_header('Content-Length', len(frame_to_send))
-                        self.end_headers()
-                        self.wfile.write(frame_to_send)
-                        self.wfile.write(b'\r\n')
+                        try:
+                            self.wfile.write(b'--FRAME\r\n')
+                            self.send_header('Content-Type', 'image/jpeg')
+                            self.send_header('Content-Length', len(frame_to_send))
+                            self.end_headers()
+                            self.wfile.write(frame_to_send)
+                            self.wfile.write(b'\r\n')
+                        except (BrokenPipeError, ConnectionResetError):
+                            # Client disconnected, break out of loop to cleanup thread
+                            break
             except Exception as e:
                 logging.info('Removed streaming client %s: %s', self.client_address, str(e))
+            finally:
+                try:
+                    self.finish()
+                except Exception:
+                    pass
         else:
             self.send_error(404)
             self.end_headers()
+
+    def finish(self):
+        # Ensure the connection is closed and resources are released
+        try:
+            super().finish()
+        except Exception:
+            pass
 
 
 class StreamingServer(socketserver.ThreadingMixIn, server.HTTPServer):
